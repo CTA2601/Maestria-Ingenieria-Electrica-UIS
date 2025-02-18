@@ -66,7 +66,7 @@ def solve_optimization():
 
     ampl.display("Ongd")
     ampl.display("Pmax_gd")
-    ampl.display("H")
+    ampl.display("PH")
 
     # Configurar el solver (BARON, CONOPT, CPLEX, GUROBI, XPRESS, IPOPT, COPT & MOSEK)  Couenne
     ampl.setOption("solver", "ipopt")
