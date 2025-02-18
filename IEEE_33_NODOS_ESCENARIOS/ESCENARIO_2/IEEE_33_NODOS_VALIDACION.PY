@@ -17,7 +17,6 @@ print("📂 Directorio actual:", os.getcwd())
 # Inicializar AMPL
 ampl = ampl_notebook(license_uuid="0b2bd731-acd3-469f-9b23-57614ace54e3")
 
-
 def determinar_peores_horas():
     demanda = pd.read_csv('IEEE_AMPL_PERFILES_DEMANDA.dat', sep=' ', skiprows=1, header=None, names=["Nodo", "Hora", "Valor"])
     generacion = pd.read_csv('IEEE_AMPL_PERFILES_GENERACION.dat', sep=' ', skiprows=1, header=None, names=["Nodo", "Hora", "Valor"])
@@ -47,12 +46,12 @@ def determinar_peores_horas():
             print(f"⚠️ La hora {h} no está en los datos de generación o demanda")
     peores_horas = sorted(balance_hora, key=balance_hora.get, reverse=True)[:1]
     print(f"🔥 Peores horas seleccionadas: {peores_horas}")
+    horas_str = " ".join(map(str, peores_horas))
+    with open('IEEE_AMPL_PEORES_HORAS.dat', 'w') as f:
+        f.write(f"set PH := {horas_str};\n")
     return peores_horas
 
 peores_horas = determinar_peores_horas()
-horas_str = " ".join(map(str, peores_horas))
-with open('IEEE_AMPL_PEORES_HORAS.dat', 'w') as f:
-    f.write(f"set PH := {horas_str};\n")
 
 
 def solve_optimization():
@@ -77,11 +76,11 @@ def solve_optimization():
     try:
         pgd_values = ampl.getVariable("Pgd").getValues().toPandas()
         pgd_values.reset_index(inplace=True)
-        print("📊 Valores de la variable Pgd:")
-        print(pgd_values)
+        #print("📊 Valores de la variable Pgd:")
+        #print(pgd_values)
         # Calcular HC
         HC = pgd_values["Pgd.val"].sum()  # Suma de los valores de Pgd
-        print(f"✅ El valor de HC es: {HC}")
+        print(f"\n✅ El valor de HC es: {HC}")
     except RuntimeError:
         print("⚠️ No se pudieron obtener valores para la variable 'Pgd'.")
 
@@ -149,8 +148,8 @@ def solve_optimization():
         "QD_V": QD_values
     }
 
-if __name__ == "__main__":
-    resultados = solve_optimization()
+#if __name__ == "__main__":
+    #resultados = solve_optimization()
     #print("Resultados del problema de optimización:", resultados)
 
 
@@ -164,14 +163,16 @@ ControlQueue = DSSCircuit.CtrlQueue
 dss_engine.AllowForms = 0
 
 # Horas restantes que no estan dentro de las peores horas
-horas_restantes = [hora for hora in range(1, 25) if hora not in peores_horas]
+def horas_restantes(peores_horas):
+    horas_restantes = [hora for hora in range(1, 25) if hora not in peores_horas]
+    return horas_restantes
+
 #print(horas_restantes)
 #print(resultados.get("Pgd_V", None))
 #print(resultados.get("PD_V", None))
 #print(resultados.get("QD_V", None))
 
 def generar_archivos_dss(hora, pgd_value, PD_value, QD_value):
-
     # Cargar perfiles de generación y demanda
     demanda = pd.read_csv('IEEE_AMPL_PERFILES_DEMANDA.dat', sep=' ', skiprows=1, header=None, names=["Nodo", "Hora", "Valor"])
     generacion = pd.read_csv('IEEE_AMPL_PERFILES_GENERACION.dat', sep=' ', skiprows=1, header=None, names=["Nodo", "Hora", "Valor"])
@@ -207,7 +208,7 @@ def generar_archivos_dss(hora, pgd_value, PD_value, QD_value):
             perfil_generacion = generacion_hora[generacion_hora.index == bus_number].values
             pgd_value = row['Pgd.val'] * perfil_generacion[0] * 1000 if len(perfil_generacion) > 0 else 0
             f.write(f"New Generator.{bus_number} Bus1={bus_number} Phases=3 kV=12.66 kW={pgd_value:.6f} kvar=0\n")
-    print(f"\n✅ Archivo de generadores para la hora {hora} generado con éxito.")
+    #print(f"\n✅ Archivo de generadores para la hora {hora} generado con éxito.")
 
     # 🔹 Generar archivo de demandas
     with open("IEEE_33_DEMANDAS.dss", "w") as f:
@@ -217,12 +218,10 @@ def generar_archivos_dss(hora, pgd_value, PD_value, QD_value):
             PD_value = row['PD'] * perfil_demanda * 1000
             QD_value = row['QD'] * perfil_demanda * 1000
             f.write(f"New Load.{bus_number} Bus1={bus_number} Phases=3 kV=12.66 kW={PD_value:.6f} kvar={QD_value:.6f}\n")
-    print(f"✅ Archivo de demandas para la hora {hora} generado con éxito.")
+    #print(f"✅ Archivo de demandas para la hora {hora} generado con éxito.")
 
 
-def obtener_resultados(horas):
-    # Lista para almacenar las horas con tensiones fuera del rango
-    horas_fuera_rango = []
+def obtener_resultados(horas, peores_horas, resultados):
     # Lista para almacenar las horas con tensiones fuera del rango y generación mayor a 0
     horas_fuera_rango_con_generacion = []
 
@@ -234,7 +233,7 @@ def obtener_resultados(horas):
     for hora in horas:
         generar_archivos_dss(hora, pgd_values, PD_values, QD_values)
 
-        print(f"🔹 Ejecutando simulación en OpenDSS para la hora {hora}...")
+        print(f"\n🔹 Ejecutando simulación en OpenDSS para la hora {hora}")
 
         DSSText.Command = "Clear"
         DSSText.Command = "New Circuit.33bussystem bus1=1 basekv=12.66 pu=1 phases=3 mvasc3=1000000 frequency=60"
@@ -256,17 +255,17 @@ def obtener_resultados(horas):
             generator = generator.strip()
             if generator:
                 DSSText.Command = generator
-        print(f"✅ {DSSCircuit.Generators.Count} Generadores cargados correctamente en OpenDSS para la hora {hora}.")
+        #print(f"✅ {DSSCircuit.Generators.Count} Generadores cargados correctamente en OpenDSS para la hora {hora}.")
         for linea in comando_lineas:
             linea = linea.strip()
             if linea:
                 DSSText.Command = linea
-        print(f"✅ {DSSCircuit.Lines.Count} Líneas cargadas correctamente en OpenDSS para la hora {hora}.")
+        #print(f"✅ {DSSCircuit.Lines.Count} Líneas cargadas correctamente en OpenDSS para la hora {hora}.")
         for load in comando_demandas:
             load = load.strip()
             if load:
                 DSSText.Command = load
-        print(f"✅ {DSSCircuit.Loads.Count} Cargas cargadas correctamente en OpenDSS para la hora {hora}.")
+        #print(f"✅ {DSSCircuit.Loads.Count} Cargas cargadas correctamente en OpenDSS para la hora {hora}.")
         DSSText.Command = "Reset"
         DSSText.Command = "Set Voltagebases=[12.66]"
         DSSText.Command = "CalcVoltageBases"
@@ -280,9 +279,9 @@ def obtener_resultados(horas):
         else:
             print(f"⚠️ La solución no converge para la hora {hora}")
         line_loss = DSSCircuit.LineLosses
-        print("📢 Resultados pérdidas de potencia:")
+        #print("📢 Resultados pérdidas de potencia:")
         print(f"🔌Pérdidas Potencia Activa (P) = {round(abs(line_loss[0]), 3)} kW")
-        print(f"🔌Pérdidas Potencia reactiva (Q) = {round(abs(line_loss[1]), 3)} kVAr")
+        #print(f"🔌Pérdidas Potencia reactiva (Q) = {round(abs(line_loss[1]), 3)} kVAr")
         bus_names = []
         voltages_pu = []
         for bus in DSSCircuit.Buses:
@@ -297,30 +296,42 @@ def obtener_resultados(horas):
         print(f"⚡ Voltaje Máximo: {max_voltage:.4f} p.u. en el nodo {max_bus}")
         print(f"⚡ Voltaje Mínimo: {min_voltage:.4f} p.u. en el nodo {min_bus}")
         suma_generadores = DSSCircuit.Generators.kW
-        print(suma_generadores)
+        #print(suma_generadores)
         # Verificar si las tensiones están fuera del rango
         if max_voltage > 1.05 or min_voltage < 0.95:
-            horas_fuera_rango.append(hora)
             # Verificar si la suma de los generadores instalados es mayor a 0
             if suma_generadores > 0:
                 horas_fuera_rango_con_generacion.append(hora)
                 print(f"⚠️ La hora {hora} tiene tensiones fuera del rango y es una hora de generación.")
-            else:
-                print(f"⚠️ La hora {hora} tiene tensiones fuera del rango pero no es una hora de generación.")
+                # Actualizar el archivo de peores horas
+                peores_horas_actualizadas = list(set(peores_horas + horas_fuera_rango_con_generacion))
+                horas_str = " ".join(map(str, peores_horas_actualizadas))  # Convertir horas a string para escribir en el archivo
+                with open('IEEE_AMPL_PEORES_HORAS.dat', 'w') as f:
+                    f.write(f"set PH := {horas_str};\n")
+                print(f"✅ Archivo de peores horas actualizado con la hora {hora}: {horas_str}")
+                Bandera = 1
+                break
+    else:
+        Bandera = 0
+        peores_horas_actualizadas = peores_horas
 
-    # Imprimir las horas con tensiones fuera del rango
-    print(f"\n⏰ Horas con tensiones fuera del rango 1.05 - 0.95: {horas_fuera_rango}")
-    # Imprimir las horas con tensiones fuera del rango y generación mayor a 0
-    print(f"⏰ Horas con tensiones fuera del rango y generación mayor a 0: {horas_fuera_rango_con_generacion}")
-   # Unir las listas sin duplicados
-    peores_horas_actualizadas = list(set(peores_horas + horas_fuera_rango_con_generacion))
-    # Imprimir las horas combinadas
-    print(f"⏰ Horas combinadas (peores horas y horas con generación): {peores_horas_actualizadas}")
-    # Actualizar el archivo de peores horas
-    horas_str = " ".join(map(str, peores_horas_actualizadas))  # Convertir horas a string para escribir en el archivo
-    with open('IEEE_AMPL_PEORES_HORAS.dat', 'w') as f:
-        f.write(f"set PH := {horas_str};\n")
-    print(f"✅ Archivo de peores horas actualizado con las horas combinadas: {horas_str}")
-# Ejecutar la validación para las horas restantes
-obtener_resultados(horas_restantes)
+    return {"Bandera": Bandera, "peores_horas": peores_horas_actualizadas}
 
+peores_horas = determinar_peores_horas()
+Horas_restantes = horas_restantes(peores_horas)
+resultados = solve_optimization()
+nuevos_resultados = obtener_resultados(Horas_restantes, peores_horas, resultados)
+Bandera = nuevos_resultados.get("Bandera", None)
+contador = 0
+
+while Bandera == 1 and contador <= 10:
+    peores_horas = nuevos_resultados.get("peores_horas", None)
+    Horas_restantes = horas_restantes(peores_horas)
+    resultados = solve_optimization()
+    nuevos_resultados = obtener_resultados(Horas_restantes, peores_horas, resultados)
+    Bandera = nuevos_resultados.get("Bandera", None)
+    contador += 1
+    #print("contador esta en: ", contador)
+HC = resultados.get("HC", None)
+print("\n🎯 Solución final obtenida")
+print("💡 El valor del HC final es :", HC)
