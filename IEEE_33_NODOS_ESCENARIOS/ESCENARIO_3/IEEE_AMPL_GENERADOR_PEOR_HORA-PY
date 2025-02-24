@@ -1,0 +1,50 @@
+import os
+import pandas as pd
+# Limpiar consola
+os.system('cls' if os.name == 'nt' else 'clear')
+
+# Definir rutas
+main_folder = "AMPL"
+sub_folder = "IEEE_33_NODOS_ESCENARIOS"
+sub_sub_folder = "ESCENARIO_2"
+base_path = os.getcwd()
+target_path = os.path.join(base_path, main_folder, sub_folder, sub_sub_folder)
+os.chdir(target_path)
+print("📂 Directorio actual:", os.getcwd())
+
+def determinar_peores_horas():
+    demanda = pd.read_csv('IEEE_AMPL_PERFILES_DEMANDA.dat', sep=' ', skiprows=1, header=None, names=["Nodo", "Hora", "Valor"])
+    generacion = pd.read_csv('IEEE_AMPL_PERFILES_GENERACION.dat', sep=' ', skiprows=1, header=None, names=["Nodo", "Hora", "Valor"])
+    demanda = demanda.dropna().reset_index(drop=True)
+    generacion = generacion.dropna().reset_index(drop=True)
+    demanda = demanda[demanda["Nodo"] != ";"]
+    generacion = generacion[generacion["Nodo"] != ";"]
+    demanda["Nodo"]     = pd.to_numeric(demanda["Nodo"], errors='coerce')
+    demanda["Hora"]     = pd.to_numeric(demanda["Hora"], errors='coerce')
+    demanda["Valor"]    = pd.to_numeric(demanda["Valor"], errors='coerce')
+    generacion["Nodo"]  = pd.to_numeric(generacion["Nodo"], errors='coerce')
+    generacion["Hora"]  = pd.to_numeric(generacion["Hora"], errors='coerce')
+    generacion["Valor"] = pd.to_numeric(generacion["Valor"], errors='coerce')
+    demanda = demanda.dropna().reset_index(drop=True)
+    generacion = generacion.dropna().reset_index(drop=True)
+    demanda = demanda.drop_duplicates(subset=["Nodo", "Hora"])
+    generacion = generacion.drop_duplicates(subset=["Nodo", "Hora"])
+    demanda_pivot = demanda.pivot(index="Nodo", columns="Hora", values="Valor").fillna(0)
+    generacion_pivot = generacion.pivot(index="Nodo", columns="Hora", values="Valor").fillna(0)
+    print("✅ Demanda Pivotada:\n", demanda_pivot)
+    print("✅ Generación Pivotada:\n", generacion_pivot)
+    balance_hora = {}
+    for h in range(1, 24):
+        if h in generacion_pivot.columns and h in demanda_pivot.columns:
+            balance_hora[h] = generacion_pivot[h].sum() - (demanda_pivot[h] * demanda_pivot[1]).sum()
+        else:
+            print(f"⚠️ La hora {h} no está en los datos de generación o demanda")
+    peores_horas = sorted(balance_hora, key=balance_hora.get, reverse=True)[:1]
+    print(f"🔥 Peores horas seleccionadas: {peores_horas}")
+    return peores_horas
+
+
+peores_horas = determinar_peores_horas()
+horas_str = " ".join(map(str, peores_horas))
+with open('IEEE_AMPL_PEORES_HORAS.dat', 'w') as f:
+    f.write(f"set PH := {horas_str};\n")

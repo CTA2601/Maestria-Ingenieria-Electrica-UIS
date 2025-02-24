@@ -8,7 +8,7 @@ import numpy as np
 os.system('cls' if os.name == 'nt' else 'clear')
 main_folder = "AMPL"
 sub_folder = "IEEE_33_NODOS_ESCENARIOS"
-sub_sub_folder = "ESCENARIO_2"
+sub_sub_folder = "ESCENARIO_3"
 base_path = os.getcwd()
 target_path = os.path.join(base_path, main_folder, sub_folder, sub_sub_folder)
 os.chdir(target_path)
@@ -71,7 +71,7 @@ def solve_optimization():
     #ampl.display("PH")
 
     # Configurar el solver (BARON, CONOPT, CPLEX, GUROBI, XPRESS, IPOPT, COPT & MOSEK)  Couenne
-    ampl.setOption("solver", "ipopt")
+    ampl.setOption("solver", "mosek")
     ampl.solve("FuncionObjetivo")
     # Obtener valor de Pgd
     try:
@@ -87,13 +87,13 @@ def solve_optimization():
 
     try:
         # Obtener los valores de V desde AMPL
-        v_values = ampl.getVariable("V").getValues().toPandas()
-        v_values.reset_index(inplace=True)
-        #print("📊 Valores de la variable v:")
-        #print(v_values)
+        u_values = ampl.getVariable("U").getValues().toPandas()
+        u_values.reset_index(inplace=True)
+        print("📊 Valores de la variable u:")
+        print(u_values)
         # Obtener el mínimo y el máximo en pu
-        v_min_pu = v_values["V.val"].min()
-        v_max_pu = v_values["V.val"].max()
+        v_min_pu = u_values["U.val"].min()**0.5
+        v_max_pu = u_values["U.val"].max()**0.5
         # Imprimir los valores correctos
         print(f"⚡ Tensión mínima (pu): {v_min_pu:.4f}")
         print(f"⚡ Tensión máxima (pu): {v_max_pu:.4f}")
@@ -206,7 +206,7 @@ def generar_archivos_dss(hora, pgd_value, PD_value, QD_value):
             bus_number = int(row['index'])  
             perfil_generacion = generacion_hora[generacion_hora.index == bus_number].values
             pgd_value = row['Pgd.val'] * perfil_generacion[0] * 1000 if len(perfil_generacion) > 0 else 0
-            f.write(f"New Generator.{bus_number} Bus1={bus_number} Phases=3 kV=12.66 kW={pgd_value:.6f} kvar=0  Vminpu=0.7 Vmaxpu=1.2 conn=Wye Model=1\n")
+            f.write(f"New Generator.{bus_number} Bus1={bus_number} Phases=3 kV=12.66 kW={pgd_value:.6f} kvar=0 Vminpu=0.7 Vmaxpu=1.2 conn=Wye Model=1\n")
     print(f"\n✅ Archivo de generadores para la hora {hora} generado con éxito.")
 
     # 🔹 Generar archivo de demandas
@@ -216,7 +216,7 @@ def generar_archivos_dss(hora, pgd_value, PD_value, QD_value):
             perfil_demanda = demanda_hora[demanda_hora.index == bus_number].values[0]
             PD_value = row['PD'] * perfil_demanda * 1000
             QD_value = row['QD'] * perfil_demanda * 1000
-            f.write(f"New Load.{bus_number} Bus1={bus_number} Phases=3 kV=12.66 kW={PD_value:.6f} kvar={QD_value:.6f}  Vminpu=0.7 Vmaxpu=1.2 conn=Wye Model=1\n")
+            f.write(f"New Load.{bus_number} Bus1={bus_number} Phases=3 kV=12.66 kW={PD_value:.6f} kvar={QD_value:.6f} Vminpu=0.7 Vmaxpu=1.2 conn=Wye Model=1\n")
     print(f"✅ Archivo de demandas para la hora {hora} generado con éxito.")
 
 

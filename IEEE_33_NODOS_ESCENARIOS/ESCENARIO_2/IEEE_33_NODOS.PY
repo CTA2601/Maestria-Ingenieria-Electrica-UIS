@@ -83,7 +83,7 @@ def solve_optimization():
          for _, row in pgd_values.iterrows():
           bus_number = int(row['index']) 
           pgd_value = row['Pgd.val'] * 1000
-          f.write(f"New Generator.{bus_number} Bus1={bus_number} Phases=3 kV=12.66 kW={pgd_value:.3f} kvar=0\n")
+          f.write(f"New Generator.{bus_number} Bus1={bus_number} Phases=3 kV=12.66 kW={pgd_value:.3f} kvar=0  Vminpu=0.7 Vmaxpu=1.2 conn=Wye Model=1\n")
         print("✅ Archivo DSS generado con éxito.")
         # Calcular HC
         HC = pgd_values["Pgd.val"].sum()  # Suma de los valores de Pgd
